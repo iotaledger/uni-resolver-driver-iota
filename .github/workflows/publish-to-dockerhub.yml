@@ -39,4 +39,4 @@ jobs:
         context: .
         file: ./Dockerfile
         push: ${{ !inputs.dry-run }}
-        labels: iotaledger/identity-grpc:${{ inputs.tag }}
+        labels: iotaledger/uni-resolver-driver-iota:${{ inputs.tag }}
