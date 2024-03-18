@@ -13,17 +13,17 @@ use warp::{
     Filter,
 };
 
-const IOTA_NETWORK_NAME: &'static str = "iota";
-const SMR_NETWORK_NAME: &'static str = "smr";
-const IOTA_NODE_ENDPOINT: &'static str = "IOTA_NODE_ENDPOINT";
-const SMR_NODE_ENDPOINT: &'static str = "SMR_NODE_ENDPOINT";
-const IOTA_CUSTOM_NETWORK_NAME: &'static str = "IOTA_CUSTOM_NETWORK_NAME";
-const IOTA_CUSTOM_NODE_ENDPOINT: &'static str = "IOTA_CUSTOM_NODE_ENDPOINT";
+const IOTA_NETWORK_NAME: &str = "iota";
+const SMR_NETWORK_NAME: &str = "smr";
+const IOTA_NODE_ENDPOINT: &str = "IOTA_NODE_ENDPOINT";
+const SMR_NODE_ENDPOINT: &str = "SMR_NODE_ENDPOINT";
+const IOTA_CUSTOM_NETWORK_NAME: &str = "IOTA_CUSTOM_NETWORK_NAME";
+const IOTA_CUSTOM_NODE_ENDPOINT: &str = "IOTA_CUSTOM_NODE_ENDPOINT";
 
 #[tokio::main]
 async fn main() {
     let mut clients = vec![];
-    let envs = env::vars().into_iter().collect::<HashMap<String, String>>();
+    let envs = env::vars().collect::<HashMap<String, String>>();
 
     if let Some(iota_endpoint) = envs.get(IOTA_NODE_ENDPOINT) {
         let client: Client = Client::builder()
