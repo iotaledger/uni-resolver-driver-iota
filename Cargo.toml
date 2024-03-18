@@ -1,0 +1,12 @@
+[package]
+name = "uni-resolver-driver-iota"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+identity_iota = {git ="https://github.com/iotaledger/identity.rs.git", default_features = false, features = ["resolver", "client", "iota-client"]}
+iota-sdk = {  version = "1.0", default-features = false, features = ["tls", "client", "stronghold"] }
