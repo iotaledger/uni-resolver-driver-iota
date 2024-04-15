@@ -1,0 +1,6 @@
+target/
+.github/
+tests/
+CONTRIBUTING.md
+LICENSE
+README.md
