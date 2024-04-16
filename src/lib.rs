@@ -11,7 +11,7 @@ use axum::{
 use identity_iota::{
     document::CoreDocument,
     iota::{IotaDID, IotaDocument, IotaDocumentMetadata},
-    resolver::Resolver,
+    resolver::{ErrorCause, Resolver},
 };
 use iota_sdk::client::Client;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,10 @@ impl Server {
     }
 
     pub async fn run(self, listener: TcpListener) -> anyhow::Result<()> {
-        let resolver = self.resolver.unwrap_or(resolver().await?);
+        let resolver = match self.resolver {
+            Some(resolver) => resolver,
+            None => resolver().await?,
+        };
         let app = app(resolver).await?;
         let addr = listener.local_addr()?;
 
@@ -72,7 +75,19 @@ async fn resolve_did(
     let resolved = resolver
         .resolve(&did)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| match e.error_cause() {
+            ErrorCause::HandlerError { source, .. }
+                if source
+                    .source()
+                    .is_some_and(|e| e.to_string().contains("not found")) =>
+            {
+                (
+                    StatusCode::NOT_FOUND,
+                    "The requested DID document was not found".to_owned(),
+                )
+            }
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        })?;
 
     Ok(Json(ResolutionResponse {
         did_document: resolved.core_document().clone(),

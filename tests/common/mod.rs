@@ -3,11 +3,13 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::Context;
 use identity_iota::resolver::Resolver;
 use iota_sdk::client::secret::stronghold::StrongholdSecretManager;
 use iota_sdk::client::Password;
+use tracing_subscriber::EnvFilter;
 use uni_resolver_driver_iota::Server;
 
 use identity_iota::iota::block::output::AliasOutput;
@@ -38,9 +40,19 @@ pub static API_ENDPOINT: &str = "http://localhost";
 pub static FAUCET_ENDPOINT: &str = "http://localhost/faucet/api/enqueue";
 
 pub type MemStorage = Storage<JwkMemStore, KeyIdMemstore>;
+static TRACING_LOCK: OnceLock<()> = OnceLock::new();
+
+fn init_tracing() {
+    TRACING_LOCK.get_or_init(|| {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .compact()
+            .init()
+    });
+}
 
 pub struct TestServer {
-    _handle: JoinHandle<anyhow::Result<()>>,
+    pub _handle: JoinHandle<anyhow::Result<()>>,
     client: Client,
     storage: MemStorage,
     secret_manager: SecretManager,
@@ -49,6 +61,8 @@ pub struct TestServer {
 
 impl TestServer {
     pub async fn new() -> anyhow::Result<Self> {
+        init_tracing();
+
         let client: Client = Client::builder()
             .with_primary_node(API_ENDPOINT, None)?
             .finish()
@@ -57,7 +71,7 @@ impl TestServer {
         resolver.attach_iota_handler(client.clone());
         let server = Server::default().with_resolver(resolver);
 
-        let listener = TcpListener::bind("0.0.0.0:0")
+        let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("failed to bind to random port")?;
         let address = listener.local_addr()?;
