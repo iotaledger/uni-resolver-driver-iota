@@ -1,0 +1,27 @@
+[package]
+name = "uni-resolver-driver-iota"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "uni-resolver-driver-iota"
+
+[dependencies]
+tokio = { version = "1", features = ["net"] }
+identity_iota = { version = "1.2.0", default-features = false, features = ["resolver", "client", "iota-client", "memstore"]}
+iota-sdk = { version = "1.0", default-features = false, features = ["tls", "client", "stronghold"] }
+anyhow = "1.0.81"
+axum = { version = "0.7.5", features = ["tracing"] }
+serde = "1.0.197"
+serde_json = "1.0.115"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[dev-dependencies]
+rand = "0.8.5"
+reqwest = { version = "0.12.3", features = ["json", "rustls-tls"] }
