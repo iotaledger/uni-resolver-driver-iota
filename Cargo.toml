@@ -13,7 +13,7 @@ name = "uni-resolver-driver-iota"
 
 [dependencies]
 tokio = { version = "1", features = ["net"] }
-identity_iota = {git ="https://github.com/iotaledger/identity.rs.git", default-features = false, features = ["resolver", "client", "iota-client", "memstore"]}
+identity_iota = { version = "1.2.0", default-features = false, features = ["resolver", "client", "iota-client", "memstore"]}
 iota-sdk = { version = "1.0", default-features = false, features = ["tls", "client", "stronghold"] }
 anyhow = "1.0.81"
 axum = { version = "0.7.5", features = ["tracing"] }

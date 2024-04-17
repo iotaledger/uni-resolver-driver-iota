@@ -594,10 +594,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "did_url"
-version = "0.1.0"
+name = "did_url_parser"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70d5f6334e473e3bb5650ab4ef3e4c910296b76968e62758e7c66157ff767c05"
+checksum = "8095a051342f829a19c51eca6949da516b4de2b324e94a1e0dc8c5eb87ebe439"
 dependencies = [
  "form_urlencoded",
  "serde",
@@ -1271,8 +1271,9 @@ dependencies = [
 
 [[package]]
 name = "identity_core"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644e96d587870920c1cedc1b36a714d12b13e123dd676a3cf98670d44abc9110"
 dependencies = [
  "iota-crypto",
  "js-sys",
@@ -1288,8 +1289,9 @@ dependencies = [
 
 [[package]]
 name = "identity_credential"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7045bf8143257d82061085c96eae93328b4bae07786c6fed4945976c51a4ab65"
 dependencies = [
  "identity_core",
  "identity_did",
@@ -1308,10 +1310,11 @@ dependencies = [
 
 [[package]]
 name = "identity_did"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a14243bc6c5c43c3016f43535fb0b860be1913559d035740bf0949c3a4cb61f5"
 dependencies = [
- "did_url",
+ "did_url_parser",
  "form_urlencoded",
  "identity_core",
  "serde",
@@ -1321,10 +1324,11 @@ dependencies = [
 
 [[package]]
 name = "identity_document"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32507ec6d5d303d1a5f0665d0c298af06b5fd6325c71c06f56d157e6c52736e1"
 dependencies = [
- "did_url",
+ "did_url_parser",
  "identity_core",
  "identity_did",
  "identity_verification",
@@ -1336,8 +1340,9 @@ dependencies = [
 
 [[package]]
 name = "identity_iota"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfd0de85b0ea8ff9e60209bbfcb5cdcb7a5969092cd848183a183bfec9fa1480"
 dependencies = [
  "identity_core",
  "identity_credential",
@@ -1351,8 +1356,9 @@ dependencies = [
 
 [[package]]
 name = "identity_iota_core"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "250dfa10208dee48c9dd99f2704ce6c79b2727ac27bee0c5cf7da7425c0ec4c1"
 dependencies = [
  "async-trait",
  "futures",
@@ -1374,8 +1380,9 @@ dependencies = [
 
 [[package]]
 name = "identity_jose"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c95b2fc6d7101695d70a95c5b61a0e1040c5137c4ef3485cd342347e3bed779c"
 dependencies = [
  "identity_core",
  "iota-crypto",
@@ -1388,8 +1395,9 @@ dependencies = [
 
 [[package]]
 name = "identity_resolver"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4b35d6ab41f07c4147907f13b901abaed6f8d808384d509cf1245112ea70bf2"
 dependencies = [
  "async-trait",
  "futures",
@@ -1405,8 +1413,9 @@ dependencies = [
 
 [[package]]
 name = "identity_storage"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea2d96d9ec93dbe7582a4b13f1895f1c0c113143eb8cd86f86f5c36be990fe8"
 dependencies = [
  "async-trait",
  "futures",
@@ -1427,13 +1436,15 @@ dependencies = [
 
 [[package]]
 name = "identity_verification"
-version = "1.1.1"
-source = "git+https://github.com/iotaledger/identity.rs.git#0794379be3c18894745e5acad09488bdb3c773c6"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c00801f3c96b881d20d734ff628be3a13d7a70e86a222a590b048cbde11900e3"
 dependencies = [
  "identity_core",
  "identity_did",
  "identity_jose",
  "serde",
+ "serde_json",
  "strum",
  "thiserror",
 ]
