@@ -1,0 +1,31 @@
+name: Run tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+    branches:
+      - main
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Update local toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+      - name: Toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version
+      - name: Start iota sandbox
+        uses: './.github/actions/iota-sandbox/setup'
+      - name: Run tests
+        run: cargo test --release
+      - name: Stop iota sandbox
+        uses: './.github/actions/iota-sandbox/tear-down'
