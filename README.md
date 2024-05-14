@@ -51,7 +51,7 @@ This is a driver implementation of [Universal Resolver](https://github.com/decen
 
 ## Example DIDs
 
-:warning: TODO: publish DID(s) on mainnet and add them here.
+[did:iota:0xf4d6f08f5a1b80dd578da7dc1b49c886d580acd4cf7d48119dfeb82b538ad88a](https://explorer.iota.org/mainnet/addr/iota1pr6dduy0tgdcph2h3knacx6fezrdtq9v6n8h6jq3nhlts26n3tvg5jwjgka)
 
 ## Build and Run (Docker)
 
