@@ -15,7 +15,7 @@ COPY . .
 # Build project 
 RUN cargo build --release --bin uni-resolver-driver-iota
 
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl ca-certificates \
