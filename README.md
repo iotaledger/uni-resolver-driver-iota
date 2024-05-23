@@ -29,6 +29,7 @@
 [![Apache 2.0 license][license-shield]][license-url]
 [![Discord][discord-shield]][discord-url]
 [![StackExchange][stackexchange-shield]][stackexchange-url]
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/iotaledger/uni-resolver-driver-iota)
 
 <!-- Add additional Badges. Some examples >
 ![Format Badge](https://github.com/iotaledger/template/workflows/Format/badge.svg "Format Badge")
