@@ -13,7 +13,7 @@ use identity_iota::{
     iota::{IotaDID, IotaDocument, IotaDocumentMetadata},
     resolver::{ErrorCause, Resolver},
 };
-use iota_sdk::client::Client;
+use iota_sdk::client::{node_manager::node::NodeAuth, Client};
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc};
 use tokio::net::TcpListener;
@@ -106,7 +106,7 @@ async fn resolver() -> anyhow::Result<SharedResolver> {
 
     if let Ok(iota_endpoint) = env::var(IOTA_NODE_ENDPOINT) {
         let client: Client = Client::builder()
-            .with_primary_node(&iota_endpoint, None)
+            .with_primary_node(&iota_endpoint, auth_token("IOTA_NODE"))
             .context("unable to create a client for the provided endpoint")?
             .finish()
             .await
@@ -117,7 +117,7 @@ async fn resolver() -> anyhow::Result<SharedResolver> {
 
     if let Ok(iota_endpoint) = env::var(SMR_NODE_ENDPOINT) {
         let client: Client = Client::builder()
-            .with_primary_node(&iota_endpoint, None)
+            .with_primary_node(&iota_endpoint, auth_token("IOTA_SMR_NODE"))
             .context("unable to create a client for the provided endpoint")?
             .finish()
             .await
@@ -130,7 +130,7 @@ async fn resolver() -> anyhow::Result<SharedResolver> {
     let custom_endpoint = env::var(IOTA_CUSTOM_NODE_ENDPOINT).ok();
     if let (Some(custom_hrp), Some(custom_endpoint)) = (custom_hrp, custom_endpoint) {
         let client: Client = Client::builder()
-            .with_primary_node(&custom_endpoint, None)
+            .with_primary_node(&custom_endpoint, auth_token("IOTA_CUSTOM_NODE"))
             .expect("unable to create a client for the provided endpoint")
             .finish()
             .await
@@ -150,4 +150,12 @@ async fn resolver() -> anyhow::Result<SharedResolver> {
     resolver.attach_multiple_iota_handlers(clients);
 
     Ok(Arc::new(resolver))
+}
+
+fn auth_token(node_name: &str) -> Option<NodeAuth> {
+    let var_name = format!("{node_name}_AUTH_TOKEN");
+    std::env::var(var_name).ok().map(|auth| NodeAuth {
+        jwt: Some(auth),
+        basic_auth_name_pwd: None,
+    })
 }
