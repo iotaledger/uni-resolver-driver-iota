@@ -77,9 +77,18 @@ cargo run --release
 ## Driver Environment Variables
 
 `IOTA_NODE_ENDPOINT` Endpoint for the `iota` network.
+
 `IOTA_SMR_NODE_ENDPOINT` Endpoint for the `smr` network.
+
 `IOTA_CUSTOM_NETWORK_NAME` HRP a of custom network.
+
 `IOTA_CUSTOM_NODE_ENDPOINT` Endpoint for the custom network.
+
+`IOTA_NODE_AUTH_TOKEN` JWT auth token for `iota`'s node.
+
+`IOTA_SMR_NODE_AUTH_TOKEN` JWT auth token for `smr`'s node.
+
+`IOTA_CUSTOM_NODE_AUTH_TOKEN` JWT auth token for custom network's node.
 
 Note: at least one network must be configured.
 
