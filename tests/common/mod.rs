@@ -1,45 +1,35 @@
 // Copyright 2020-2023 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use anyhow::Context;
-use identity_iota::resolver::Resolver;
-use iota_sdk::client::secret::stronghold::StrongholdSecretManager;
-use iota_sdk::client::Password;
+use fastcrypto::ed25519::Ed25519PublicKey;
+use fastcrypto::traits::ToFromBytes;
+use identity_iota::iota::{IotaDocument, NetworkName};
+use identity_iota::storage::{JwkDocumentExt, Storage, StorageSigner};
+use identity_iota::verification::jwk::Jwk;
+use identity_iota::verification::jws::JwsAlgorithm;
+use identity_iota::verification::MethodScope;
+use identity_iota_core::rebased::client::{IdentityClient, IdentityClientReadOnly};
+use identity_iota_core::rebased::transaction::Transaction;
+use identity_storage::{JwkMemStore, JwkStorage, KeyId, KeyIdMemstore, KeyType};
+use iota_sdk::types::base_types::IotaAddress;
+use iota_sdk::{IotaClient, IotaClientBuilder};
+use tokio::net::TcpListener;
+use tokio::process::Command;
+use tokio::task::JoinHandle;
 use tracing_subscriber::EnvFilter;
 use uni_resolver_driver_iota::Server;
 
-use identity_iota::iota::block::output::AliasOutput;
-use identity_iota::iota::IotaClientExt;
-use identity_iota::iota::IotaDocument;
-use identity_iota::iota::IotaIdentityClientExt;
-use identity_iota::iota::NetworkName;
-use identity_iota::storage::JwkDocumentExt;
-use identity_iota::storage::JwkMemStore;
-use identity_iota::storage::KeyIdMemstore;
-use identity_iota::storage::Storage;
-use identity_iota::verification::MethodScope;
-
-use identity_iota::verification::jws::JwsAlgorithm;
-use iota_sdk::client::api::GetAddressesOptions;
-use iota_sdk::client::node_api::indexer::query_parameters::QueryParameter;
-use iota_sdk::client::secret::SecretManager;
-use iota_sdk::client::Client;
-use iota_sdk::crypto::keys::bip39;
-use iota_sdk::types::block::address::Address;
-use iota_sdk::types::block::address::Bech32Address;
-use iota_sdk::types::block::address::Hrp;
-use rand::distributions::DistString;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
-
-pub static API_ENDPOINT: &str = "http://localhost";
-pub static FAUCET_ENDPOINT: &str = "http://localhost/faucet/api/enqueue";
-
 pub type MemStorage = Storage<JwkMemStore, KeyIdMemstore>;
+
+pub const DEVNET_FAUCET_ENDPOINT: &str = "https://faucet.devnet.iota.cafe/gas";
+
+pub const IOTA_DEVNET_IDENTITY_PACKAGE_ID: &str = "0xf4e01655b0906ecd3d2bbf3dab03a77acdc13662d07edabce502a9087c122a39";
+
 static TRACING_LOCK: OnceLock<()> = OnceLock::new();
 
 fn init_tracing() {
@@ -53,40 +43,36 @@ fn init_tracing() {
 
 pub struct TestServer {
     pub _handle: JoinHandle<anyhow::Result<()>>,
-    client: Client,
-    storage: MemStorage,
-    secret_manager: SecretManager,
+    client: IdentityClientReadOnly,
     address: SocketAddr,
+    storage: Arc<MemStorage>,
 }
 
 impl TestServer {
     pub async fn new() -> anyhow::Result<Self> {
         init_tracing();
+        dotenvy::dotenv().ok();
 
-        let client: Client = Client::builder()
-            .with_primary_node(API_ENDPOINT, None)?
-            .finish()
-            .await?;
-        let mut resolver = Resolver::<IotaDocument>::new();
-        resolver.attach_iota_handler(client.clone());
-        let server = Server::default().with_resolver(resolver);
+        let storage = Arc::new(Storage::new(JwkMemStore::new(), KeyIdMemstore::new()));
+
+        let client: IotaClient = IotaClientBuilder::default().build_devnet().await?;
+
+        let client = IdentityClientReadOnly::new(client, IOTA_DEVNET_IDENTITY_PACKAGE_ID.parse()?).await?;
+
+        let mut clients = HashMap::new();
+
+        clients.insert(client.network().to_string(), client.clone());
+
+        let server = Server::default().with_clients(clients);
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("failed to bind to random port")?;
         let address = listener.local_addr()?;
 
-        let secret_manager: SecretManager = SecretManager::Stronghold(
-            StrongholdSecretManager::builder()
-                .password(Password::from("secure_password".to_owned()))
-                .build(random_stronghold_path())?,
-        );
-        let storage: MemStorage = MemStorage::new(JwkMemStore::new(), KeyIdMemstore::new());
-
         Ok(Self {
             client,
             storage,
-            secret_manager,
             address,
             _handle: tokio::spawn(server.run(listener)),
         })
@@ -97,9 +83,7 @@ impl TestServer {
     }
 
     pub async fn create_did(&mut self) -> anyhow::Result<IotaDocument> {
-        create_did(&self.client, &mut self.secret_manager, &self.storage)
-            .await
-            .map(|(_, doc, _)| doc)
+        create_did(&self.client, &self.storage).await.map(|(_, doc, _)| doc)
     }
 }
 
@@ -108,24 +92,26 @@ impl TestServer {
 /// Its functionality is equivalent to the "create DID" example
 /// and exists for convenient calling from the other examples.
 pub async fn create_did(
-    client: &Client,
-    secret_manager: &mut SecretManager,
-    storage: &MemStorage,
-) -> anyhow::Result<(Address, IotaDocument, String)> {
-    let address: Address = get_address_with_funds(client, secret_manager, FAUCET_ENDPOINT)
-        .await
-        .context("failed to get address with funds")?;
+    client: &IdentityClientReadOnly,
+    storage: &Arc<MemStorage>,
+) -> anyhow::Result<(IotaAddress, IotaDocument, String)> {
+    let (address, key_id, pub_key_jwk) = get_address(storage).await.context("failed to get address with funds")?;
 
-    let network_name: NetworkName = client.network_name().await?;
+    // Fund the account
+    request_faucet_funds(address).await?;
 
-    let (document, fragment): (IotaDocument, String) =
-        create_did_document(&network_name, storage).await?;
+    let signer = StorageSigner::new(storage, key_id.clone(), pub_key_jwk);
 
-    let alias_output: AliasOutput = client.new_did_output(address, document, None).await?;
+    let identity_client = IdentityClient::new(client.clone(), signer).await?;
 
-    let document: IotaDocument = client
-        .publish_did_output(secret_manager, alias_output)
-        .await?;
+    let network_name = client.network();
+    let (document, fragment): (IotaDocument, String) = create_did_document(network_name, storage).await?;
+
+    let document = identity_client
+        .publish_did_document(document)
+        .execute(&identity_client)
+        .await?
+        .output;
 
     Ok((address, document, fragment))
 }
@@ -136,7 +122,7 @@ pub async fn create_did(
 /// and exists for convenient calling from the other examples.
 pub async fn create_did_document(
     network_name: &NetworkName,
-    storage: &MemStorage,
+    storage: &Arc<MemStorage>,
 ) -> anyhow::Result<(IotaDocument, String)> {
     let mut document: IotaDocument = IotaDocument::new(network_name);
 
@@ -153,106 +139,46 @@ pub async fn create_did_document(
     Ok((document, fragment))
 }
 
-/// Generates an address from the given [`SecretManager`] and adds funds from the faucet.
-pub async fn get_address_with_funds(
-    client: &Client,
-    stronghold: &SecretManager,
-    faucet_endpoint: &str,
-) -> anyhow::Result<Address> {
-    let address: Bech32Address = get_address(client, stronghold).await?;
+/// Initializes the [`Storage`] and generates a new address.
+pub async fn get_address(storage: &Arc<MemStorage>) -> anyhow::Result<(IotaAddress, KeyId, Jwk)> {
+    let generated_key = storage
+        .key_storage()
+        .generate(KeyType::new("Ed25519"), JwsAlgorithm::EdDSA)
+        .await?;
 
-    request_faucet_funds(client, address, faucet_endpoint)
-        .await
-        .context("failed to request faucet funds")?;
+    let key_id = generated_key.key_id;
 
-    Ok(*address)
-}
+    let pub_key_jwt = generated_key.jwk.to_public().expect("should not fail");
+    let pub_key_bytes = pub_key_jwt
+        .try_okp_params()
+        .map(|key| identity_iota::verification::jwu::decode_b64(key.x.clone()).expect("should be decodable"))?;
 
-/// Initializes the [`SecretManager`] with a new mnemonic, if necessary,
-/// and generates an address from the given [`SecretManager`].
-pub async fn get_address(
-    client: &Client,
-    secret_manager: &SecretManager,
-) -> anyhow::Result<Bech32Address> {
-    let random: [u8; 32] = rand::random();
-    let mnemonic = bip39::wordlist::encode(random.as_ref(), &bip39::wordlist::ENGLISH)
-        .map_err(|err| anyhow::anyhow!(format!("{err:?}")))?;
+    let address = Ed25519PublicKey::from_bytes(&pub_key_bytes)?;
 
-    if let SecretManager::Stronghold(ref stronghold) = secret_manager {
-        match stronghold.store_mnemonic(mnemonic).await {
-            Ok(()) => (),
-            Err(iota_sdk::client::stronghold::Error::MnemonicAlreadyStored) => (),
-            Err(err) => anyhow::bail!(err),
-        }
-    } else {
-        anyhow::bail!("expected a `StrongholdSecretManager`");
-    }
-
-    let bech32_hrp: Hrp = client.get_bech32_hrp().await?;
-    let address: Bech32Address = secret_manager
-        .generate_ed25519_addresses(
-            GetAddressesOptions::default()
-                .with_range(0..1)
-                .with_bech32_hrp(bech32_hrp),
-        )
-        .await?[0];
-
-    Ok(address)
+    Ok((IotaAddress::from(&address), key_id, pub_key_jwt))
 }
 
 /// Requests funds from the faucet for the given `address`.
-async fn request_faucet_funds(
-    client: &Client,
-    address: Bech32Address,
-    faucet_endpoint: &str,
-) -> anyhow::Result<()> {
-    iota_sdk::client::request_funds_from_faucet(faucet_endpoint, &address).await?;
+async fn request_faucet_funds(address: IotaAddress) -> anyhow::Result<()> {
+    let output = Command::new("iota")
+        .arg("client")
+        .arg("faucet")
+        .arg("--address")
+        .arg(address.to_string())
+        .arg("--url")
+        .arg(DEVNET_FAUCET_ENDPOINT)
+        .arg("--json")
+        .output()
+        .await
+        .context("Failed to execute command")?;
 
-    tokio::time::timeout(std::time::Duration::from_secs(45), async {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-            let balance = get_address_balance(client, &address)
-                .await
-                .context("failed to get address balance")?;
-            if balance > 0 {
-                break;
-            }
-        }
-        Ok::<(), anyhow::Error>(())
-    })
-    .await
-    .context("maximum timeout exceeded")??;
-
-    Ok(())
-}
-
-/// Returns the balance of the given Bech32-encoded `address`.
-async fn get_address_balance(client: &Client, address: &Bech32Address) -> anyhow::Result<u64> {
-    let output_ids = client
-        .basic_output_ids(vec![
-            QueryParameter::Address(address.to_owned()),
-            QueryParameter::HasExpiration(false),
-            QueryParameter::HasTimelock(false),
-            QueryParameter::HasStorageDepositReturn(false),
-        ])
-        .await?;
-
-    let outputs = client.get_outputs(&output_ids).await?;
-
-    let mut total_amount = 0;
-    for output_response in outputs {
-        total_amount += output_response.output().amount();
+    // Check if the output is success
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to request funds from faucet: {}",
+            std::str::from_utf8(&output.stderr).unwrap()
+        );
     }
 
-    Ok(total_amount)
-}
-
-/// Creates a random stronghold path in the temporary directory, whose exact location is OS-dependent.
-pub fn random_stronghold_path() -> PathBuf {
-    let mut file = std::env::temp_dir();
-    file.push("test_strongholds");
-    file.push(rand::distributions::Alphanumeric.sample_string(&mut rand::thread_rng(), 32));
-    file.set_extension("stronghold");
-    file.to_owned()
+    Ok(())
 }

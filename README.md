@@ -39,7 +39,6 @@
 ![Test Badge](https://github.com/iotaledger/template/workflows/Test/badge.svg "Test Badge")
 ![Coverage Badge](https://coveralls.io/repos/github/iotaledger/template/badge.svg "Coverage Badge")
 
-
 <!-- PROJECT LOGO -->
 
 # Universal Resolver Driver for IOTA
@@ -76,19 +75,13 @@ cargo run --release
 
 ## Driver Environment Variables
 
-`IOTA_NODE_ENDPOINT` Endpoint for the `iota` network.
+`IOTA_MAINNET_NODE_ENDPOINT` Endpoint for the mainnet `iota` network.
 
-`IOTA_SMR_NODE_ENDPOINT` Endpoint for the `smr` network.
-
-`IOTA_CUSTOM_NETWORK_NAME` HRP a of custom network.
+`IOTA_MAINNET_IDENTITY_PKG_ID` Identity package ID on the mainnet `iota` network.
 
 `IOTA_CUSTOM_NODE_ENDPOINT` Endpoint for the custom network.
 
-`IOTA_NODE_AUTH_TOKEN` JWT auth token for `iota`'s node.
-
-`IOTA_SMR_NODE_AUTH_TOKEN` JWT auth token for `smr`'s node.
-
-`IOTA_CUSTOM_NODE_AUTH_TOKEN` JWT auth token for custom network's node.
+`IOTA_CUSTOM_IDENTITY_PKG_ID` Identity package ID on the custom network.
 
 Note: at least one network must be configured.
 

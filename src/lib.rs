@@ -1,49 +1,53 @@
 // Copyright 2020-2024 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::env;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use anyhow::{bail, Context};
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    routing::get,
-    Json, Router,
-};
-use identity_iota::{
-    document::CoreDocument,
-    iota::{IotaDID, IotaDocument, IotaDocumentMetadata},
-    resolver::{ErrorCause, Resolver},
-};
-use iota_sdk::client::{node_manager::node::NodeAuth, Client};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum::{Json, Router};
+use identity_iota::document::CoreDocument;
+use identity_iota::iota::{IotaDID, IotaDocumentMetadata};
+use identity_iota_core::rebased::client::IdentityClientReadOnly;
+use identity_iota_core::rebased::migration::get_identity;
+// use identity_iota_core::rebased::migration::identity::get_identity;
+use iota_sdk::types::base_types::ObjectID;
+use iota_sdk::IotaClientBuilder;
 use serde::{Deserialize, Serialize};
-use std::{env, sync::Arc};
 use tokio::net::TcpListener;
 
-type SharedResolver = Arc<Resolver<IotaDocument>>;
+type NetworkClients = Arc<HashMap<String, IdentityClientReadOnly>>;
 
-pub const IOTA_NETWORK_NAME: &str = "iota";
-pub const SMR_NETWORK_NAME: &str = "smr";
-pub const IOTA_NODE_ENDPOINT: &str = "IOTA_NODE_ENDPOINT";
-pub const SMR_NODE_ENDPOINT: &str = "SMR_NODE_ENDPOINT";
-pub const IOTA_CUSTOM_NETWORK_NAME: &str = "IOTA_CUSTOM_NETWORK_NAME";
+/// Custom endpoint for the IOTA network.
 pub const IOTA_CUSTOM_NODE_ENDPOINT: &str = "IOTA_CUSTOM_NODE_ENDPOINT";
+pub const IOTA_CUSTOM_IDENTITY_PKG_ID: &str = "IOTA_CUSTOM_IDENTITY_PKG_ID";
 
-#[derive(Debug, Default)]
+/// The identity package ID to use for the resolver. This is for the mainnet.
+pub const IOTA_MAINNET_IDENTITY_PKG_ID: &str = "IOTA_MAINNET_IDENTITY_PKG_ID";
+const IOTA_MAINNET_NODE_ENDPOINT: &str = "IOTA_MAINNET_NODE_ENDPOINT";
+
+#[derive(Default)]
 pub struct Server {
-    resolver: Option<SharedResolver>,
+    clients: Option<NetworkClients>,
 }
 
 impl Server {
-    pub fn with_resolver(mut self, resolver: Resolver<IotaDocument>) -> Self {
-        self.resolver = Some(Arc::new(resolver));
+    pub fn with_clients(mut self, clients: HashMap<String, IdentityClientReadOnly>) -> Self {
+        self.clients = Some(Arc::new(clients));
         self
     }
 
     pub async fn run(self, listener: TcpListener) -> anyhow::Result<()> {
-        let resolver = match self.resolver {
-            Some(resolver) => resolver,
-            None => resolver().await?,
+        let clients = match self.clients {
+            Some(clients) => clients,
+            None => init_clients().await?,
         };
-        let app = app(resolver).await?;
+        let app = app(clients).await?;
         let addr = listener.local_addr()?;
 
         tracing::debug!("Server is starting at {addr}");
@@ -69,93 +73,69 @@ pub struct ResolutionResponse {
 )]
 async fn resolve_did(
     Path(arg): Path<String>,
-    State(resolver): State<SharedResolver>,
+    State(clients): State<NetworkClients>,
 ) -> Result<Json<ResolutionResponse>, (StatusCode, String)> {
     let did = IotaDID::parse(&arg).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-    let resolved = resolver
-        .resolve(&did)
+    let network = did.network_str().to_string();
+
+    let object_id = ObjectID::from_str(did.tag_str()).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let client = clients
+        .get(&network)
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Unsupported network: {}", network)))?;
+
+    let identity = get_identity(client, object_id)
         .await
-        .map_err(|e| match e.error_cause() {
-            ErrorCause::HandlerError { source, .. }
-                if source
-                    .source()
-                    .is_some_and(|e| e.to_string().contains("not found")) =>
-            {
-                (
-                    StatusCode::NOT_FOUND,
-                    "The requested DID document was not found".to_owned(),
-                )
-            }
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                "The requested DID document was not found".to_owned(),
+            )
         })?;
 
     Ok(Json(ResolutionResponse {
-        did_document: resolved.core_document().clone(),
-        did_resolution_metadata: resolved.metadata,
+        did_document: identity.core_document().clone(),
+        did_resolution_metadata: identity.metadata.clone(),
     }))
 }
 
-async fn app(resolver: SharedResolver) -> anyhow::Result<Router> {
+async fn app(clients: NetworkClients) -> anyhow::Result<Router> {
     Ok(Router::new()
         .route("/1.0/identifiers/:did", get(resolve_did))
-        .with_state(resolver))
+        .with_state(clients))
 }
 
-async fn resolver() -> anyhow::Result<SharedResolver> {
-    let mut clients = vec![];
+async fn init_clients() -> anyhow::Result<NetworkClients> {
+    let mut clients = HashMap::new();
 
-    if let Ok(iota_endpoint) = env::var(IOTA_NODE_ENDPOINT) {
-        let client: Client = Client::builder()
-            .with_primary_node(&iota_endpoint, auth_token("IOTA_NODE"))
-            .context("unable to create a client for the provided endpoint")?
-            .finish()
-            .await
-            .context("unable to create a client for the provided endpoint")?;
+    let networks = [
+        (IOTA_MAINNET_NODE_ENDPOINT, IOTA_MAINNET_IDENTITY_PKG_ID),
+        (IOTA_CUSTOM_NODE_ENDPOINT, IOTA_CUSTOM_IDENTITY_PKG_ID),
+    ];
 
-        clients.push((IOTA_NETWORK_NAME, client));
-    }
+    for (endpoint_var, pkg_id_var) in networks {
+        if let (Some(endpoint), Some(pkg_id)) = (env::var(endpoint_var).ok(), env::var(pkg_id_var).ok()) {
+            let client = IotaClientBuilder::default()
+                .build(&endpoint)
+                .await
+                .with_context(|| "unable to create a client".to_string())?;
 
-    if let Ok(iota_endpoint) = env::var(SMR_NODE_ENDPOINT) {
-        let client: Client = Client::builder()
-            .with_primary_node(&iota_endpoint, auth_token("IOTA_SMR_NODE"))
-            .context("unable to create a client for the provided endpoint")?
-            .finish()
-            .await
-            .context("unable to create a client for the provided endpoint")?;
+            let identity_pkg_id =
+                ObjectID::from_str(&pkg_id).context("unable to parse the provided identity package ID")?;
 
-        clients.push((SMR_NETWORK_NAME, client));
-    }
+            let identity_client = IdentityClientReadOnly::new(client, identity_pkg_id)
+                .await
+                .context("unable to create an identity client")?;
 
-    let custom_hrp = env::var(IOTA_CUSTOM_NETWORK_NAME).ok();
-    let custom_endpoint = env::var(IOTA_CUSTOM_NODE_ENDPOINT).ok();
-    if let (Some(custom_hrp), Some(custom_endpoint)) = (custom_hrp, custom_endpoint) {
-        let client: Client = Client::builder()
-            .with_primary_node(&custom_endpoint, auth_token("IOTA_CUSTOM_NODE"))
-            .expect("unable to create a client for the provided endpoint")
-            .finish()
-            .await
-            .expect("unable to create a client for the provided endpoint");
-
-        let static_str: &'static str = Box::leak(custom_hrp.to_owned().into_boxed_str());
-        clients.push((static_str, client));
+            let network = identity_client.network().to_string();
+            clients.insert(network, identity_client);
+        }
     }
 
     if clients.is_empty() {
-        bail!(
-            "No clients were created. Make sure you provide a configuration for at least one network"
-        )
+        bail!("No identity clients were created");
     }
 
-    let mut resolver = Resolver::<IotaDocument>::new();
-    resolver.attach_multiple_iota_handlers(clients);
-
-    Ok(Arc::new(resolver))
-}
-
-fn auth_token(node_name: &str) -> Option<NodeAuth> {
-    let var_name = format!("{node_name}_AUTH_TOKEN");
-    std::env::var(var_name).ok().map(|auth| NodeAuth {
-        jwt: Some(auth),
-        basic_auth_name_pwd: None,
-    })
+    Ok(Arc::new(clients))
 }
