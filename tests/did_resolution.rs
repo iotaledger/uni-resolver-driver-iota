@@ -11,6 +11,7 @@ use uni_resolver_driver_iota::ResolutionResponse;
 // Creates and fetches a DID document using the resolver server.
 async fn did_resolution_works() -> anyhow::Result<()> {
     let mut server = TestServer::new().await?;
+
     let target_doc = server.create_did().await?;
 
     let client = Client::default();

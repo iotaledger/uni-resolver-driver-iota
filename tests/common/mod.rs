@@ -1,7 +1,6 @@
 // Copyright 2020-2023 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 
@@ -9,6 +8,7 @@ use anyhow::Context;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use identity_iota::iota::{IotaDocument, NetworkName};
+use identity_iota::prelude::Resolver;
 use identity_iota::storage::{JwkDocumentExt, Storage, StorageSigner};
 use identity_iota::verification::jwk::Jwk;
 use identity_iota::verification::jws::JwsAlgorithm;
@@ -57,17 +57,17 @@ impl TestServer {
 
         let client = IdentityClientReadOnly::new(client).await?;
 
-        let mut clients = HashMap::new();
+        let mut resolver = Resolver::<IotaDocument>::new();
 
-        clients.insert(client.network().to_string(), client.clone());
+        resolver.attach_iota_handler(client.clone());
 
-        let server = Server::default().with_clients(clients);
+        let server = Server::default().with_resolver(resolver);
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("failed to bind to random port")?;
         let address = listener.local_addr()?;
-
+        println!("Server running on: {}", address);
         Ok(Self {
             client,
             storage,

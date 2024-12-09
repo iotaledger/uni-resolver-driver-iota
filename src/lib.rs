@@ -1,7 +1,7 @@
 // Copyright 2020-2024 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -13,14 +13,16 @@ use axum::routing::get;
 use axum::{Json, Router};
 use identity_iota::document::CoreDocument;
 use identity_iota::iota::{IotaDID, IotaDocumentMetadata};
+use identity_iota::prelude::Resolver;
+use identity_iota::resolver::ErrorCause;
 use identity_iota_core::rebased::client::IdentityClientReadOnly;
-use identity_iota_core::rebased::migration::get_identity;
+use identity_iota_core::IotaDocument;
 use iota_sdk::types::base_types::ObjectID;
 use iota_sdk::{IotaClient, IotaClientBuilder};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
-type NetworkClients = Arc<HashMap<String, IdentityClientReadOnly>>;
+type SharedResolver = Arc<Resolver<IotaDocument>>;
 
 /// Custom endpoint for the IOTA network.
 pub const IOTA_CUSTOM_NODE_ENDPOINT: &str = "IOTA_CUSTOM_NODE_ENDPOINT";
@@ -105,21 +107,21 @@ impl Network {
 }
 #[derive(Default)]
 pub struct Server {
-    clients: Option<NetworkClients>,
+    resolver: Option<SharedResolver>,
 }
 
 impl Server {
-    pub fn with_clients(mut self, clients: HashMap<String, IdentityClientReadOnly>) -> Self {
-        self.clients = Some(Arc::new(clients));
+    pub fn with_resolver(mut self, resolver: Resolver<IotaDocument>) -> Self {
+        self.resolver = Some(Arc::new(resolver));
         self
     }
 
     pub async fn run(self, listener: TcpListener) -> anyhow::Result<()> {
-        let clients = match self.clients {
-            Some(clients) => clients,
-            None => init_clients().await?,
+        let resolver = match self.resolver {
+            Some(resolver) => resolver,
+            None => init_resolver().await?,
         };
-        let app = app(clients).await?;
+        let app = app(resolver).await?;
         let addr = listener.local_addr()?;
 
         tracing::debug!("Server is starting at {addr}");
@@ -145,26 +147,18 @@ pub struct ResolutionResponse {
 )]
 async fn resolve_did(
     Path(arg): Path<String>,
-    State(clients): State<NetworkClients>,
+    State(resolver): State<SharedResolver>,
 ) -> Result<Json<ResolutionResponse>, (StatusCode, String)> {
     let did = IotaDID::parse(&arg).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-    let network = did.network_str().to_string();
 
-    let object_id = ObjectID::from_str(did.tag_str()).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let identity = resolver.resolve(&did).await.map_err(|e| match e.error_cause() {
+        ErrorCause::HandlerError { source, .. } if source.to_string().contains("could not find") => (
+            StatusCode::NOT_FOUND,
+            "The requested DID document was not found".to_owned(),
+        ),
 
-    let client = clients
-        .get(&network)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Unsupported network: {}", network)))?;
-
-    let identity = get_identity(client, object_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                "The requested DID document was not found".to_owned(),
-            )
-        })?;
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    })?;
 
     Ok(Json(ResolutionResponse {
         did_document: identity.core_document().clone(),
@@ -172,15 +166,15 @@ async fn resolve_did(
     }))
 }
 
-async fn app(clients: NetworkClients) -> anyhow::Result<Router> {
+async fn app(resolver: SharedResolver) -> anyhow::Result<Router> {
     Ok(Router::new()
         .route("/1.0/identifiers/:did", get(resolve_did))
-        .with_state(clients))
+        .with_state(resolver))
 }
 
 /// Initialize identity clients for all configured networks.
-async fn init_clients() -> anyhow::Result<NetworkClients> {
-    let mut clients = HashMap::new();
+async fn init_resolver() -> anyhow::Result<SharedResolver> {
+    let mut clients = vec![];
     let networks = Network::from_env()?;
 
     for network in networks {
@@ -201,13 +195,18 @@ async fn init_clients() -> anyhow::Result<NetworkClients> {
 
         let network_name = identity_client.network().to_string();
         tracing::debug!("Initialized client for network: {}", network_name);
-
-        if clients.insert(network_name.clone(), identity_client).is_some() {
-            tracing::warn!("Overwrote existing client for network: {}", network_name);
-        }
+        let network_name: &'static str = Box::leak(network_name.into_boxed_str());
+        clients.push((network_name, identity_client));
     }
 
-    ensure!(!clients.is_empty(), "No identity clients were created");
+    ensure!(
+        !clients.is_empty(),
+        "No clients were created. Make sure you provide a configuration for at least one network"
+    );
 
-    Ok(Arc::new(clients))
+    let mut resolver = Resolver::<IotaDocument>::new();
+
+    resolver.attach_multiple_iota_handlers(clients);
+
+    Ok(Arc::new(resolver))
 }
