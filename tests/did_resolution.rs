@@ -8,7 +8,6 @@ use reqwest::Client;
 use uni_resolver_driver_iota::ResolutionResponse;
 
 #[tokio::test]
-#[ignore = "This test fails for now because of a bug in the gas estimation"]
 // Creates and fetches a DID document using the resolver server.
 async fn did_resolution_works() -> anyhow::Result<()> {
     let mut server = TestServer::new().await?;
@@ -37,11 +36,12 @@ async fn missing_did_resolution_fails_with_404() -> anyhow::Result<()> {
     let server = TestServer::new().await?;
 
     let client = Client::default();
+
     let res = client
         .get(format!(
             "http://{}/1.0/identifiers/{}",
             server.address(),
-            "did:iota:unknwn:0x4bbd377239914fced5c1207a28443064050e880a1234858904e0ce31a5a9768c"
+            "did:iota:devnet:0x4bbd377239914fced5c1207a28443064050e880a1234858904e0ce31a5a9768c"
         ))
         .send()
         .await?;

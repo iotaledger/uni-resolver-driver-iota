@@ -27,7 +27,6 @@ COPY --from=builder /app/target/release/uni-resolver-driver-iota uni-resolver-dr
 EXPOSE 8080
 
 # TODO: #6 Switch to mainnet when ready
-ENV IOTA_CUSTOM_NODE_ENDPOINT="https://api.devnet.iota.cafe/"
-ENV IOTA_CUSTOM_IDENTITY_PKG_ID="0xf4e01655b0906ecd3d2bbf3dab03a77acdc13662d07edabce502a9087c122a39"
+ENV NETWORK=devnet
 
 ENTRYPOINT [ "./uni-resolver-driver-iota" ]

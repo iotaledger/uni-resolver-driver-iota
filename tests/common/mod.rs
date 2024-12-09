@@ -28,8 +28,6 @@ pub type MemStorage = Storage<JwkMemStore, KeyIdMemstore>;
 
 pub const DEVNET_FAUCET_ENDPOINT: &str = "https://faucet.devnet.iota.cafe/gas";
 
-pub const IOTA_DEVNET_IDENTITY_PACKAGE_ID: &str = "0xf4e01655b0906ecd3d2bbf3dab03a77acdc13662d07edabce502a9087c122a39";
-
 static TRACING_LOCK: OnceLock<()> = OnceLock::new();
 
 fn init_tracing() {
@@ -57,7 +55,7 @@ impl TestServer {
 
         let client: IotaClient = IotaClientBuilder::default().build_devnet().await?;
 
-        let client = IdentityClientReadOnly::new(client, IOTA_DEVNET_IDENTITY_PACKAGE_ID.parse()?).await?;
+        let client = IdentityClientReadOnly::new(client).await?;
 
         let mut clients = HashMap::new();
 
