@@ -96,7 +96,10 @@ pub async fn create_did(
     let (address, key_id, pub_key_jwk) = get_address(storage).await.context("failed to get address with funds")?;
 
     // Fund the account
-    request_faucet_funds(address).await?;
+    // WORKAROUND: Ignore the resullts of the faucet request as sometime the
+    // request will fail but the funds will be
+    // available.
+    let _ = request_faucet_funds(address).await;
 
     let signer = StorageSigner::new(storage, key_id.clone(), pub_key_jwk);
 
