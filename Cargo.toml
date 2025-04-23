@@ -12,11 +12,11 @@ path = "src/main.rs"
 name = "uni-resolver-driver-iota"
 
 [dependencies]
-anyhow = "1.0.93"
-axum = { version = "0.7.9", features = ["tracing"] }
-identity_iota = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.1", package = "identity_iota" }
-identity_iota_core = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.1", package = "identity_iota_core" }
-iota-sdk = { git = "https://github.com/iotaledger/iota.git", package = "iota-sdk", tag = "v0.7.3-rc" }
+anyhow = "1.0"
+axum = { version = "0.8", features = ["tracing"] }
+identity_iota = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.4", package = "identity_iota" }
+identity_iota_core = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.4", package = "identity_iota_core" }
+iota-sdk = { git = "https://github.com/iotaledger/iota.git", package = "iota-sdk", tag = "v0.11.6-rc" }
 serde = "1.0"
 serde_json = "1.0"
 tokio = { version = "1", features = ["net"] }
@@ -26,9 +26,9 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 [dev-dependencies]
 async-trait = "0.1.76"
 dotenvy = "0.15.7"
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", package = "fastcrypto" }
-identity_storage = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.1", package = "identity_storage" }
-iota-keys = { git = "https://github.com/iotaledger/iota.git", package = "iota-keys", tag = "v0.7.3-rc" }
-rand = "0.8.5"
-reqwest = { version = "0.12.9", features = ["json", "rustls-tls"] }
-secret-storage = { git = "https://github.com/iotaledger/secret-storage", tag = "v0.1.0" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898", package = "fastcrypto" }
+identity_storage = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-alpha.4", package = "identity_storage" }
+iota-keys = { git = "https://github.com/iotaledger/iota.git", package = "iota-keys", tag = "v0.11.6-rc" }
+rand = "0.9"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+secret-storage = { git = "https://github.com/iotaledger/secret-storage", tag = "v0.3.0" }

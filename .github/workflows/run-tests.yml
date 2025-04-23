@@ -29,6 +29,8 @@ jobs:
 
       - name: Setup IOTA Sandbox
         uses: ./.github/actions/iota-sandbox
+        with:
+          start-sandbox: 'false'
 
       - name: Run tests
         run: cargo test --release

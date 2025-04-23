@@ -168,7 +168,7 @@ async fn resolve_did(
 
 async fn app(resolver: SharedResolver) -> anyhow::Result<Router> {
     Ok(Router::new()
-        .route("/1.0/identifiers/:did", get(resolve_did))
+        .route("/1.0/identifiers/{did}", get(resolve_did))
         .with_state(resolver))
 }
 
