@@ -26,7 +26,7 @@ use uni_resolver_driver_iota::Server;
 
 pub type MemStorage = Storage<JwkMemStore, KeyIdMemstore>;
 
-pub const DEVNET_FAUCET_ENDPOINT: &str = "https://faucet.devnet.iota.cafe/gas";
+pub const DEVNET_FAUCET_ENDPOINT: &str = "https://faucet.devnet.iota.cafe/v1/gas";
 
 static TRACING_LOCK: OnceLock<()> = OnceLock::new();
 

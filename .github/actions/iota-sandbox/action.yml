@@ -63,7 +63,7 @@ runs:
         echo "Looking for platform: $PLATFORM_TRIPLET"
 
         curl "https://api.github.com/repos/iotaledger/iota/releases" \
-           --header 'authorization: Bearer ${{ github.token }}' > releases.json
+          --header 'authorization: Bearer ${{ github.token }}' > releases.json
 
         {
           # Note: Releases might be visible before all binaries are available
@@ -91,11 +91,11 @@ runs:
       if: ${{ inputs.start-sandbox == 'true' }}
       run: |
         # Clear previous configuration
-        rm -rf ~/.iota || true 
+        rm -rf ~/.iota || true
 
         # Check log file arg
         LOGFILE="${{ inputs.logfile }}"
         echo "Starting server with log file: $LOGFILE"
 
         # Start the network
-        iota start --with-faucet ${{ inputs.logfile && format('> {0} 2>&1', inputs.logfile) || '' }} &
+        iota start --with-faucet --force-regenesis  ${{ inputs.logfile && format('> {0} 2>&1', inputs.logfile) || '' }} &
