@@ -3,11 +3,13 @@
 
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::fmt::Display;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{bail, ensure, Context};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use identity_iota::core::Url;
@@ -159,13 +161,9 @@ pub struct ResolutionResponse {
 async fn resolve_did(
     Path(arg): Path<String>,
     State(resolver): State<SharedResolver>,
-) -> Result<Json<ResolutionResponse>, (StatusCode, String)> {
-    let did = IotaDID::parse(&arg).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-    let did_document = resolver
-        .resolve(&did)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("cannot find DID Document `{did}`")))?;
+) -> Result<Json<ResolutionResponse>, Response> {
+    let did = IotaDID::parse(&arg).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()).into_response())?;
+    let did_document = resolver.resolve(&did).await.map_err(IntoResponse::into_response)?;
 
     Ok(Json(ResolutionResponse {
         did_document: did_document.core_document().clone(),
@@ -209,6 +207,66 @@ async fn init_resolver() -> anyhow::Result<SharedResolver> {
     Ok(Arc::new(Resolver::new(clients)))
 }
 
+#[derive(Debug)]
+pub enum DidResolutionErrorKind {
+    NotFound(Box<IdentityError>),
+    UnknownNetwork(String),
+    Client(Box<IdentityError>),
+}
+
+impl Display for DidResolutionErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound(e) => e.fmt(f),
+            Self::UnknownNetwork(network) => write!(f, "unknown network `{network}`"),
+            Self::Client(_) => f.write_str("internal client error"),
+        }
+    }
+}
+
+impl std::error::Error for DidResolutionErrorKind {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::NotFound(e) => Some(e),
+            Self::Client(e) => Some(e),
+            Self::UnknownNetwork(_) => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DidResolutionError {
+    pub did: IotaDID,
+    pub kind: DidResolutionErrorKind,
+}
+
+impl Display for DidResolutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to resolve DID `{}`", self.did)
+    }
+}
+
+impl std::error::Error for DidResolutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.kind)
+    }
+}
+
+impl IntoResponse for DidResolutionError {
+    fn into_response(self) -> axum::response::Response {
+        use DidResolutionErrorKind::*;
+        let status_code = match &self.kind {
+            NotFound(_) => StatusCode::NOT_FOUND,
+            UnknownNetwork(_) => StatusCode::BAD_REQUEST,
+            Client(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        // Use anyhow to format the error and its sources.
+        let err_msg = format!("{:#}", anyhow::Error::from(self));
+        (status_code, err_msg).into_response()
+    }
+}
+
 pub struct Resolver {
     clients: HashMap<String, IdentityClientReadOnly>,
 }
@@ -219,17 +277,18 @@ impl Resolver {
         Self { clients }
     }
 
-    pub async fn resolve(&self, did: &IotaDID) -> anyhow::Result<Option<IotaDocument>> {
+    pub async fn resolve(&self, did: &IotaDID) -> Result<IotaDocument, DidResolutionError> {
         let network = did.network_str();
-        let client = self
-            .clients
-            .get(network)
-            .ok_or_else(|| anyhow!("unknown network `{network}`"))?;
+        let client = self.clients.get(network).ok_or_else(|| DidResolutionError {
+            did: did.clone(),
+            kind: DidResolutionErrorKind::UnknownNetwork(network.to_owned()),
+        })?;
 
         match client.resolve_did(did).await {
-            Ok(doc) => Ok(Some(doc)),
-            Err(IdentityError::DIDResolutionError(_)) => Ok(None),
-            Err(e) => Err(e.into()),
+            Ok(doc) => Ok(doc),
+            Err(e @ IdentityError::DIDResolutionError(_)) => Err(DidResolutionErrorKind::NotFound(Box::new(e))),
+            Err(e) => Err(DidResolutionErrorKind::Client(Box::new(e))),
         }
+        .map_err(|kind| DidResolutionError { did: did.clone(), kind })
     }
 }
