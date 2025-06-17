@@ -75,13 +75,12 @@ cargo run --release
 
 ## Network Configuration
 
-The resolver supports three network types:
+The resolver supports the 3 official IOTA networks as well as a custom one:
 
+- Mainnet
 - Testnet
 - Devnet
 - Custom
-
-NOTE: Mainnet is not supported yet.
 
 ### Environment Variables
 
@@ -89,7 +88,7 @@ The following environment variables are used to configure the network:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NETWORK` | Yes | Network type: `"testnet"`, `"devnet"`, or `"custom"` |
+| `NETWORK` | Yes | Network type: `"mainnet"`, `"testnet"`, `"devnet"`, or `"custom"` |
 | `IOTA_CUSTOM_NODE_ENDPOINT` | Only for custom network | The URL of your custom node |
 | `IOTA_CUSTOM_IDENTITY_PKG_ID` | Only for custom network | The identity package ID for your custom network |
 

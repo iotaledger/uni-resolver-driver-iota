@@ -3,7 +3,6 @@
 
 use std::collections::HashSet;
 use std::env;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{bail, ensure, Context};
@@ -11,6 +10,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
+use identity_iota::core::Url;
 use identity_iota::document::CoreDocument;
 use identity_iota::iota::{IotaDID, IotaDocumentMetadata};
 use identity_iota::prelude::Resolver;
@@ -30,14 +30,15 @@ pub const IOTA_CUSTOM_IDENTITY_PKG_ID: &str = "IOTA_CUSTOM_IDENTITY_PKG_ID";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-// TODO: Add mainnet
 pub enum Network {
-    /// Testnet configuration
+    /// Mainnet configuration.
+    Mainnet,
+    /// Testnet configuration.
     Testnet,
-    /// Devnet configuration
+    /// Devnet configuration.
     Devnet,
-    /// Custom network configuration with required endpoint and package ID
-    Custom { endpoint: String, pkg_id: String },
+    /// Custom network configuration with required endpoint and package ID.
+    Custom { endpoint: Url, pkg_id: ObjectID },
 }
 
 impl Network {
@@ -46,15 +47,18 @@ impl Network {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - NETWORK environment variable is not set
-    /// - Custom network is specified but required environment variables are missing
-    /// - Unsupported network type is specified
+    /// - NETWORK environment variable is not set;
+    /// - Custom network is specified but required environment variables are missing;
+    /// - Unsupported network type is specified;
     pub fn from_env() -> anyhow::Result<HashSet<Self>> {
-        let network_var = env::var("NETWORK").context("NETWORK environment variable is not set")?;
+        let network_var = env::var("NETWORK").context("`NETWORK` environment variable is not set")?;
         let mut networks = HashSet::new();
 
         for network in network_var.split(',') {
             match network.trim().to_lowercase().as_str() {
+                "mainnet" => {
+                    networks.insert(Self::Mainnet);
+                }
                 "testnet" => {
                     networks.insert(Self::Testnet);
                 }
@@ -63,10 +67,14 @@ impl Network {
                 }
                 "custom" => {
                     let endpoint = env::var(IOTA_CUSTOM_NODE_ENDPOINT)
-                        .context("Custom network requires IOTA_CUSTOM_NODE_ENDPOINT to be set")?;
+                        .context("Custom network requires env variable `IOTA_CUSTOM_NODE_ENDPOINT` to be set")?
+                        .parse()
+                        .context("provided endpoint is not a valid URL")?;
 
                     let pkg_id = env::var(IOTA_CUSTOM_IDENTITY_PKG_ID)
-                        .context("Custom network requires IOTA_CUSTOM_IDENTITY_PKG_ID to be set")?;
+                        .context("Custom network requires env variable `IOTA_CUSTOM_IDENTITY_PKG_ID` to be set")?
+                        .parse()
+                        .context("malformed package ID")?;
 
                     networks.insert(Self::Custom { endpoint, pkg_id });
                 }
@@ -86,6 +94,10 @@ impl Network {
     /// Returns an error if the client cannot be created.
     pub async fn get_client(&self) -> anyhow::Result<IotaClient> {
         let client = match self {
+            Network::Mainnet => IotaClientBuilder::default()
+                .build_mainnet()
+                .await
+                .context("failed to create mainnet client")?,
             Network::Testnet => IotaClientBuilder::default()
                 .build_testnet()
                 .await
@@ -181,14 +193,10 @@ async fn init_resolver() -> anyhow::Result<SharedResolver> {
         let client = network.get_client().await.context("Failed to create IOTA client")?;
 
         let identity_client = match network {
-            Network::Custom { pkg_id, .. } => {
-                let pkg_id = ObjectID::from_str(&pkg_id).context("Failed to parse custom network package ID")?;
-
-                IdentityClientReadOnly::new_with_pkg_id(client, pkg_id)
-                    .await
-                    .context("Failed to create custom network identity client")?
-            }
-            Network::Testnet | Network::Devnet => IdentityClientReadOnly::new(client)
+            Network::Custom { pkg_id, .. } => IdentityClientReadOnly::new_with_pkg_id(client, pkg_id)
+                .await
+                .context("Failed to create custom network identity client")?,
+            Network::Mainnet | Network::Testnet | Network::Devnet => IdentityClientReadOnly::new(client)
                 .await
                 .context("Failed to create identity client")?,
         };
