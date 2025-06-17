@@ -3,7 +3,7 @@ WORKDIR /app
 RUN apt update && apt install lld clang -y
 
 FROM chef as planner
-COPY . . 
+COPY . .
 # Compute lock file for project
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -12,7 +12,7 @@ COPY --from=planner /app/recipe.json recipe.json
 # Build project's dependencies
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-# Build project 
+# Build project
 RUN cargo build --release --bin uni-resolver-driver-iota
 
 FROM debian:bookworm-slim AS runtime
@@ -25,6 +25,8 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/uni-resolver-driver-iota uni-resolver-driver-iota
 EXPOSE 8080
-ENV IOTA_CUSTOM_NETWORK_NAME=rms
-ENV IOTA_CUSTOM_NODE_ENDPOINT=https://api.testnet.shimmer.network
+
+# TODO: #6 Switch to mainnet when ready
+ENV NETWORK=devnet
+
 ENTRYPOINT [ "./uni-resolver-driver-iota" ]

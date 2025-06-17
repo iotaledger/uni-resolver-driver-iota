@@ -5,27 +5,32 @@ on:
     branches:
       - main
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
 
 jobs:
   run-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
       - uses: actions/checkout@v3
+
       - name: Update local toolchain
         run: |
           rustup update
           rustup component add clippy
+
       - name: Toolchain info
         run: |
           cargo --version --verbose
           rustc --version
           cargo clippy --version
-      - name: Start iota sandbox
-        uses: './.github/actions/iota-sandbox/setup'
+
+      - name: Setup IOTA Sandbox
+        uses: ./.github/actions/iota-sandbox
+        with:
+          start-sandbox: 'false'
+
       - name: Run tests
         run: cargo test --release
-      - name: Stop iota sandbox
-        uses: './.github/actions/iota-sandbox/tear-down'

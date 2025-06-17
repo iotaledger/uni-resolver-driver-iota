@@ -39,7 +39,6 @@
 ![Test Badge](https://github.com/iotaledger/template/workflows/Test/badge.svg "Test Badge")
 ![Coverage Badge](https://coveralls.io/repos/github/iotaledger/template/badge.svg "Coverage Badge")
 
-
 <!-- PROJECT LOGO -->
 
 # Universal Resolver Driver for IOTA
@@ -74,23 +73,62 @@ docker run -p 8080:8080 iotaledger/uni-resolver-driver-iota
 cargo run --release
 ```
 
-## Driver Environment Variables
+## Network Configuration
 
-`IOTA_NODE_ENDPOINT` Endpoint for the `iota` network.
+The resolver supports the 3 official IOTA networks as well as a custom one:
 
-`IOTA_SMR_NODE_ENDPOINT` Endpoint for the `smr` network.
+- Mainnet
+- Testnet
+- Devnet
+- Custom
 
-`IOTA_CUSTOM_NETWORK_NAME` HRP a of custom network.
+### Environment Variables
 
-`IOTA_CUSTOM_NODE_ENDPOINT` Endpoint for the custom network.
+The following environment variables are used to configure the network:
 
-`IOTA_NODE_AUTH_TOKEN` JWT auth token for `iota`'s node.
-
-`IOTA_SMR_NODE_AUTH_TOKEN` JWT auth token for `smr`'s node.
-
-`IOTA_CUSTOM_NODE_AUTH_TOKEN` JWT auth token for custom network's node.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NETWORK` | Yes | Network type: `"mainnet"`, `"testnet"`, `"devnet"`, or `"custom"` |
+| `IOTA_CUSTOM_NODE_ENDPOINT` | Only for custom network | The URL of your custom node |
+| `IOTA_CUSTOM_IDENTITY_PKG_ID` | Only for custom network | The identity package ID for your custom network |
 
 Note: at least one network must be configured.
+
+### Multiple Network Configuration
+
+You can specify multiple networks by providing a comma-separated list in the `NETWORK` environment variable. Examples are provided below.
+
+### Example
+
+#### Single Network
+
+```bash
+NETWORK=testnet
+```
+
+#### Multiple Networks
+
+```bash
+NETWORK=testnet,devnet
+```
+
+#### Custom Network
+
+```bash
+NETWORK=custom
+IOTA_CUSTOM_NODE_ENDPOINT=https://your-custom-node-endpoint.com
+IOTA_CUSTOM_IDENTITY_PKG_ID=0x4bbd377239914fced5c1207a28443064050e880a1234858904e0ce31a5a9768c
+```
+
+### Custom Network with Multiple Clients
+
+```bash
+NETWORK=custom,testnet
+IOTA_CUSTOM_NODE_ENDPOINT=https://your-custom-node-endpoint.com
+IOTA_CUSTOM_IDENTITY_PKG_ID=0x4bbd377239914fced5c1207a28443064050e880a1234858904e0ce31a5a9768c
+```
+
+This will create two identity clients, one for the custom network and one for the testnet network.
 
 ## Contributing
 

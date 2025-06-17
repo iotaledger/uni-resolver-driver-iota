@@ -1,6 +1,6 @@
 [package]
 name = "uni-resolver-driver-iota"
-version = "0.1.2"
+version = "0.2.0-alpha"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,16 +12,23 @@ path = "src/main.rs"
 name = "uni-resolver-driver-iota"
 
 [dependencies]
+anyhow = "1.0"
+axum = { version = "0.8", features = ["tracing"] }
+identity_iota = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-beta.2", package = "identity_iota" }
+identity_iota_core = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-beta.2", package = "identity_iota_core" }
+iota-sdk = { git = "https://github.com/iotaledger/iota.git", package = "iota-sdk", tag = "v0.12.0-rc" }
+serde = "1.0"
+serde_json = "1.0"
 tokio = { version = "1", features = ["net"] }
-identity_iota = { version = "1.2.0", default-features = false, features = ["resolver", "client", "iota-client", "memstore"]}
-iota-sdk = { version = "1.0", default-features = false, features = ["tls", "client", "stronghold"] }
-anyhow = "1.0.81"
-axum = { version = "0.7.5", features = ["tracing"] }
-serde = "1.0.197"
-serde_json = "1.0.115"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [dev-dependencies]
-rand = "0.8.5"
-reqwest = { version = "0.12.3", features = ["json", "rustls-tls"] }
+async-trait = "0.1.76"
+dotenvy = "0.15.7"
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898", package = "fastcrypto" }
+identity_storage = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-beta.2", package = "identity_storage" }
+iota-keys = { git = "https://github.com/iotaledger/iota.git", package = "iota-keys", tag = "v0.12.0-rc" }
+rand = "0.9"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+secret-storage = { git = "https://github.com/iotaledger/secret-storage", tag = "v0.3.0" }
