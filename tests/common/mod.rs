@@ -7,14 +7,13 @@ use std::sync::{Arc, OnceLock};
 use anyhow::Context;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::traits::ToFromBytes;
-use identity_iota::iota::{IotaDocument, NetworkName};
+use identity_iota::iota::IotaDocument;
 use identity_iota::prelude::Resolver;
 use identity_iota::storage::{JwkDocumentExt, Storage, StorageSigner};
 use identity_iota::verification::jwk::Jwk;
 use identity_iota::verification::jws::JwsAlgorithm;
 use identity_iota::verification::MethodScope;
 use identity_iota_core::rebased::client::{IdentityClient, IdentityClientReadOnly};
-use identity_iota_core::rebased::transaction::Transaction;
 use identity_storage::{JwkMemStore, JwkStorage, KeyId, KeyIdMemstore, KeyType};
 use iota_sdk::types::base_types::IotaAddress;
 use iota_sdk::{IotaClient, IotaClientBuilder};
@@ -107,7 +106,7 @@ pub async fn create_did(
 
     let document = identity_client
         .publish_did_document(document)
-        .execute(&identity_client)
+        .build_and_execute(&identity_client)
         .await?
         .output;
 
@@ -119,10 +118,10 @@ pub async fn create_did(
 /// Its functionality is equivalent to the "create DID" example
 /// and exists for convenient calling from the other examples.
 pub async fn create_did_document(
-    network_name: &NetworkName,
+    network_name: &str,
     storage: &Arc<MemStorage>,
 ) -> anyhow::Result<(IotaDocument, String)> {
-    let mut document: IotaDocument = IotaDocument::new(network_name);
+    let mut document: IotaDocument = IotaDocument::new(&network_name.try_into()?);
 
     let fragment: String = document
         .generate_method(
