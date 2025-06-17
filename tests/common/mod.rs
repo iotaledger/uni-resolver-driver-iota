@@ -8,7 +8,6 @@ use anyhow::Context;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use identity_iota::iota::IotaDocument;
-use identity_iota::prelude::Resolver;
 use identity_iota::storage::{JwkDocumentExt, Storage, StorageSigner};
 use identity_iota::verification::jwk::Jwk;
 use identity_iota::verification::jws::JwsAlgorithm;
@@ -21,7 +20,7 @@ use tokio::net::TcpListener;
 use tokio::process::Command;
 use tokio::task::JoinHandle;
 use tracing_subscriber::EnvFilter;
-use uni_resolver_driver_iota::Server;
+use uni_resolver_driver_iota::{Resolver, Server};
 
 pub type MemStorage = Storage<JwkMemStore, KeyIdMemstore>;
 
@@ -53,14 +52,9 @@ impl TestServer {
         let storage = Arc::new(Storage::new(JwkMemStore::new(), KeyIdMemstore::new()));
 
         let client: IotaClient = IotaClientBuilder::default().build_devnet().await?;
-
         let client = IdentityClientReadOnly::new(client).await?;
 
-        let mut resolver = Resolver::<IotaDocument>::new();
-
-        resolver.attach_iota_handler(client.clone());
-
-        let server = Server::default().with_resolver(resolver);
+        let server = Server::default().with_resolver(Resolver::new([("devnet".to_owned(), client.clone())]));
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .await

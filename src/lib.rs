@@ -1,11 +1,11 @@
 // Copyright 2020-2024 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::sync::Arc;
 
-use anyhow::{bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::get;
@@ -13,16 +13,15 @@ use axum::{Json, Router};
 use identity_iota::core::Url;
 use identity_iota::document::CoreDocument;
 use identity_iota::iota::{IotaDID, IotaDocumentMetadata};
-use identity_iota::prelude::Resolver;
-use identity_iota::resolver::ErrorCause;
 use identity_iota_core::rebased::client::IdentityClientReadOnly;
+use identity_iota_core::rebased::Error as IdentityError;
 use identity_iota_core::IotaDocument;
 use iota_sdk::types::base_types::ObjectID;
 use iota_sdk::{IotaClient, IotaClientBuilder};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
-type SharedResolver = Arc<Resolver<IotaDocument>>;
+type SharedResolver = Arc<Resolver>;
 
 /// Custom endpoint for the IOTA network.
 pub const IOTA_CUSTOM_NODE_ENDPOINT: &str = "IOTA_CUSTOM_NODE_ENDPOINT";
@@ -123,7 +122,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn with_resolver(mut self, resolver: Resolver<IotaDocument>) -> Self {
+    pub fn with_resolver(mut self, resolver: Resolver) -> Self {
         self.resolver = Some(Arc::new(resolver));
         self
     }
@@ -162,19 +161,15 @@ async fn resolve_did(
     State(resolver): State<SharedResolver>,
 ) -> Result<Json<ResolutionResponse>, (StatusCode, String)> {
     let did = IotaDID::parse(&arg).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-
-    let identity = resolver.resolve(&did).await.map_err(|e| match e.error_cause() {
-        ErrorCause::HandlerError { source, .. } if source.to_string().contains("could not find") => (
-            StatusCode::NOT_FOUND,
-            "The requested DID document was not found".to_owned(),
-        ),
-
-        _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-    })?;
+    let did_document = resolver
+        .resolve(&did)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("cannot find DID Document `{did}`")))?;
 
     Ok(Json(ResolutionResponse {
-        did_document: identity.core_document().clone(),
-        did_resolution_metadata: identity.metadata.clone(),
+        did_document: did_document.core_document().clone(),
+        did_resolution_metadata: did_document.metadata,
     }))
 }
 
@@ -203,7 +198,6 @@ async fn init_resolver() -> anyhow::Result<SharedResolver> {
 
         let network_name = identity_client.network().to_string();
         tracing::debug!("Initialized client for network: {}", network_name);
-        let network_name: &'static str = Box::leak(network_name.into_boxed_str());
         clients.push((network_name, identity_client));
     }
 
@@ -212,9 +206,30 @@ async fn init_resolver() -> anyhow::Result<SharedResolver> {
         "No clients were created. Make sure you provide a configuration for at least one network"
     );
 
-    let mut resolver = Resolver::<IotaDocument>::new();
+    Ok(Arc::new(Resolver::new(clients)))
+}
 
-    resolver.attach_multiple_iota_handlers(clients);
+pub struct Resolver {
+    clients: HashMap<String, IdentityClientReadOnly>,
+}
 
-    Ok(Arc::new(resolver))
+impl Resolver {
+    pub fn new(clients: impl IntoIterator<Item = (String, IdentityClientReadOnly)>) -> Self {
+        let clients = clients.into_iter().collect();
+        Self { clients }
+    }
+
+    pub async fn resolve(&self, did: &IotaDID) -> anyhow::Result<Option<IotaDocument>> {
+        let network = did.network_str();
+        let client = self
+            .clients
+            .get(network)
+            .ok_or_else(|| anyhow!("unknown network `{network}`"))?;
+
+        match client.resolve_did(did).await {
+            Ok(doc) => Ok(Some(doc)),
+            Err(IdentityError::DIDResolutionError(_)) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
 }

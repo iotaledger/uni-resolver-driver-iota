@@ -31,23 +31,42 @@ async fn did_resolution_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
 // Attempts to fetch a non-existent DID document to get a 404.
+#[tokio::test]
 async fn missing_did_resolution_fails_with_404() -> anyhow::Result<()> {
     let server = TestServer::new().await?;
-
     let client = Client::default();
+    let did = "did:iota:devnet:0xf4d6f08f5a1b80dd578da7dc1b49c886d580acd4cf7d48119dfeb82b538ad88b";
 
     let res = client
-        .get(format!(
-            "http://{}/1.0/identifiers/{}",
-            server.address(),
-            "did:iota:devnet:0x4bbd377239914fced5c1207a28443064050e880a1234858904e0ce31a5a9768c"
-        ))
+        .get(format!("http://{}/1.0/identifiers/{did}", server.address(),))
         .send()
         .await?;
 
     assert_eq!(res.status().as_u16(), 404);
+
+    let err_msg = res.text().await?;
+    assert_eq!(err_msg, format!("cannot find DID Document `{did}`"));
+
+    Ok(())
+}
+
+// Attempts to fetch a DID Document for a non configured network fails with 500.
+#[tokio::test]
+async fn unknown_network_fails_with_500() -> anyhow::Result<()> {
+    let server = TestServer::new().await?;
+    let client = Client::default();
+    let did = "did:iota:unknown:0xf4d6f08f5a1b80dd578da7dc1b49c886d580acd4cf7d48119dfeb82b538ad88b";
+
+    let res = client
+        .get(format!("http://{}/1.0/identifiers/{did}", server.address(),))
+        .send()
+        .await?;
+
+    assert_eq!(res.status().as_u16(), 500);
+
+    let err_msg = res.text().await?;
+    assert_eq!(&err_msg, "unknown network `unknown`");
 
     Ok(())
 }
